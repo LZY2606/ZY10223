@@ -1,0 +1,334 @@
+{
+  "name": "ZY10223-drawdown",
+  "description": "Synthetic multi-rate drawdown: duplicate short readings, gauge shift at 48 h, rate steps at 10/200 h (on samples) and 2400 h (off grid), sealing fault at 0.8 m.",
+  "units": {
+    "time": "h",
+    "rate": "m3/d",
+    "pressure": "kPa"
+  },
+  "initial_pressure_kpa": 25000.0,
+  "rate_steps": [
+    {
+      "time": 0.0,
+      "rate": 0.0
+    },
+    {
+      "time": 10.0,
+      "rate": 60.0
+    },
+    {
+      "time": 200.0,
+      "rate": 200.0
+    },
+    {
+      "time": 2400.0,
+      "rate": 80.0
+    }
+  ],
+  "gauge_shifts": [
+    {
+      "time": 48.0,
+      "offset_kpa": 8.0
+    }
+  ],
+  "truth": {
+    "permeability_md": 1000.0,
+    "thickness_m": 20.0,
+    "viscosity_pas": 0.001,
+    "porosity": 0.2,
+    "ct_pa_inv": 4e-10,
+    "well_radius_m": 0.1,
+    "cd": 5.0,
+    "skin": 0.0,
+    "fault_distance_m": 1.5
+  },
+  "samples": [
+    {
+      "idx": 0,
+      "time": 0.001,
+      "pressure_raw": 25000.0
+    },
+    {
+      "idx": 1,
+      "time": 0.002,
+      "pressure_raw": 25000.0
+    },
+    {
+      "idx": 2,
+      "time": 0.005,
+      "pressure_raw": 25000.0
+    },
+    {
+      "idx": 3,
+      "time": 0.01,
+      "pressure_raw": 25000.0
+    },
+    {
+      "idx": 4,
+      "time": 0.02,
+      "pressure_raw": 25000.0
+    },
+    {
+      "idx": 5,
+      "time": 0.02,
+      "pressure_raw": 25000.11,
+      "duplicate": true
+    },
+    {
+      "idx": 6,
+      "time": 0.05,
+      "pressure_raw": 25000.0
+    },
+    {
+      "idx": 7,
+      "time": 0.1,
+      "pressure_raw": 25000.0
+    },
+    {
+      "idx": 8,
+      "time": 0.2,
+      "pressure_raw": 25000.0
+    },
+    {
+      "idx": 9,
+      "time": 0.5,
+      "pressure_raw": 25000.0
+    },
+    {
+      "idx": 10,
+      "time": 1.0,
+      "pressure_raw": 25000.0
+    },
+    {
+      "idx": 11,
+      "time": 2.0,
+      "pressure_raw": 25000.0
+    },
+    {
+      "idx": 12,
+      "time": 5.0,
+      "pressure_raw": 25000.0
+    },
+    {
+      "idx": 13,
+      "time": 10.0,
+      "pressure_raw": 25000.0
+    },
+    {
+      "idx": 14,
+      "time": 10.5,
+      "pressure_raw": 24999.997
+    },
+    {
+      "idx": 15,
+      "time": 11.0,
+      "pressure_raw": 24999.975
+    },
+    {
+      "idx": 16,
+      "time": 12.0,
+      "pressure_raw": 24999.87
+    },
+    {
+      "idx": 17,
+      "time": 13.0,
+      "pressure_raw": 24999.707
+    },
+    {
+      "idx": 18,
+      "time": 15.0,
+      "pressure_raw": 24999.279
+    },
+    {
+      "idx": 19,
+      "time": 18.0,
+      "pressure_raw": 24998.517
+    },
+    {
+      "idx": 20,
+      "time": 22.0,
+      "pressure_raw": 24997.45
+    },
+    {
+      "idx": 21,
+      "time": 28.0,
+      "pressure_raw": 24995.946
+    },
+    {
+      "idx": 22,
+      "time": 34.0,
+      "pressure_raw": 24994.644
+    },
+    {
+      "idx": 23,
+      "time": 40.0,
+      "pressure_raw": 24993.553
+    },
+    {
+      "idx": 24,
+      "time": 48.0,
+      "pressure_raw": 25000.377
+    },
+    {
+      "idx": 25,
+      "time": 60.0,
+      "pressure_raw": 24999.067
+    },
+    {
+      "idx": 26,
+      "time": 70.0,
+      "pressure_raw": 24998.261
+    },
+    {
+      "idx": 27,
+      "time": 80.0,
+      "pressure_raw": 24997.627
+    },
+    {
+      "idx": 28,
+      "time": 92.0,
+      "pressure_raw": 24997.021
+    },
+    {
+      "idx": 29,
+      "time": 105.0,
+      "pressure_raw": 24996.491
+    },
+    {
+      "idx": 30,
+      "time": 120.0,
+      "pressure_raw": 24995.989
+    },
+    {
+      "idx": 31,
+      "time": 138.0,
+      "pressure_raw": 24995.49
+    },
+    {
+      "idx": 32,
+      "time": 150.0,
+      "pressure_raw": 24995.202
+    },
+    {
+      "idx": 33,
+      "time": 150.0,
+      "pressure_raw": 24995.132,
+      "duplicate": true
+    },
+    {
+      "idx": 34,
+      "time": 158.0,
+      "pressure_raw": 24995.025
+    },
+    {
+      "idx": 35,
+      "time": 178.0,
+      "pressure_raw": 24994.626
+    },
+    {
+      "idx": 36,
+      "time": 200.0,
+      "pressure_raw": 24994.241
+    },
+    {
+      "idx": 37,
+      "time": 260.0,
+      "pressure_raw": 24970.658
+    },
+    {
+      "idx": 38,
+      "time": 340.0,
+      "pressure_raw": 24962.625
+    },
+    {
+      "idx": 39,
+      "time": 380.0,
+      "pressure_raw": 24960.396
+    },
+    {
+      "idx": 40,
+      "time": 430.0,
+      "pressure_raw": 24958.175
+    },
+    {
+      "idx": 41,
+      "time": 470.0,
+      "pressure_raw": 24956.673
+    },
+    {
+      "idx": 42,
+      "time": 510.0,
+      "pressure_raw": 24955.334
+    },
+    {
+      "idx": 43,
+      "time": 555.0,
+      "pressure_raw": 24953.974
+    },
+    {
+      "idx": 44,
+      "time": 600.0,
+      "pressure_raw": 24952.733
+    },
+    {
+      "idx": 45,
+      "time": 660.0,
+      "pressure_raw": 24951.222
+    },
+    {
+      "idx": 46,
+      "time": 720.0,
+      "pressure_raw": 24949.842
+    },
+    {
+      "idx": 47,
+      "time": 860.0,
+      "pressure_raw": 24947.008
+    },
+    {
+      "idx": 48,
+      "time": 1000.0,
+      "pressure_raw": 24944.572
+    },
+    {
+      "idx": 49,
+      "time": 1200.0,
+      "pressure_raw": 24941.582
+    },
+    {
+      "idx": 50,
+      "time": 1450.0,
+      "pressure_raw": 24938.426
+    },
+    {
+      "idx": 51,
+      "time": 1750.0,
+      "pressure_raw": 24935.238
+    },
+    {
+      "idx": 52,
+      "time": 2100.0,
+      "pressure_raw": 24932.103
+    },
+    {
+      "idx": 53,
+      "time": 2300.0,
+      "pressure_raw": 24930.524
+    },
+    {
+      "idx": 54,
+      "time": 2500.0,
+      "pressure_raw": 24952.444
+    },
+    {
+      "idx": 55,
+      "time": 2700.0,
+      "pressure_raw": 24958.122
+    },
+    {
+      "idx": 56,
+      "time": 3000.0,
+      "pressure_raw": 24961.113
+    }
+  ]
+}
