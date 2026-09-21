@@ -34,3 +34,7 @@ coverage/
 .vite/
 .turbo/
 *.tsbuildinfo
+
+# 运行期 SQLite 数据库
+/data/
+*.db

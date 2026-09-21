@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>压降译井台</title>
+<style>
+  :root { --bg:#0f1420; --panel:#171e2e; --line:#2a3450; --txt:#e7edf7;
+          --muted:#93a0bb; --accent:#5ec8f2; --warn:#f2b65e; --ok:#7bd88f;
+          --dp:#8fa6ff; --der:#ff9e6d; --raw:#54607d; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:13px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+         background:var(--bg); color:var(--txt); }
+  header { padding:10px 16px; border-bottom:1px solid var(--line);
+           display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; letter-spacing:1px; }
+  header .sub { color:var(--muted); font-size:12px; }
+  button { background:#243049; color:var(--txt); border:1px solid var(--line);
+           border-radius:6px; padding:5px 10px; cursor:pointer; font-size:12px; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); color:#08121e; border-color:var(--accent); font-weight:600; }
+  input, select { background:#10172a; color:var(--txt); border:1px solid var(--line);
+                  border-radius:5px; padding:4px 6px; font-size:12px; width:80px; }
+  .layout { display:grid; grid-template-columns:1fr 340px; gap:10px; padding:10px; }
+  .grid4 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px 10px; }
+  .card h3 { margin:0 0 6px; font-size:13px; color:var(--accent); font-weight:600; }
+  svg { width:100%; display:block; }
+  .side .card { margin-bottom:10px; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { padding:3px 6px; border-bottom:1px solid var(--line); text-align:right; }
+  th:first-child, td:first-child { text-align:left; }
+  .tag { display:inline-block; padding:0 6px; border-radius:10px; font-size:11px;
+         background:#223; border:1px solid var(--line); color:var(--muted); }
+  .tag.flag { color:var(--warn); border-color:#5a4520; }
+  .muted { color:var(--muted); }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:4px 0; }
+  .pill { font-family:ui-monospace,Menlo,monospace; font-size:11px; color:var(--ok);
+          background:#12241a; border:1px solid #24402e; padding:1px 7px; border-radius:10px; }
+  .iv { border:1px solid var(--line); border-radius:8px; padding:6px 8px; margin:6px 0; }
+  .iv.wbs { border-left:3px solid var(--ok); }
+  .iv.radial { border-left:3px solid var(--accent); }
+  .iv.boundary { border-left:3px solid var(--warn); }
+  .legend { display:flex; gap:14px; font-size:11px; color:var(--muted); margin-top:2px; }
+  .legend i { display:inline-block; width:10px; height:3px; vertical-align:middle; margin-right:4px; }
+  #toast { position:fixed; bottom:14px; right:14px; background:#22304a; border:1px solid var(--accent);
+           border-radius:8px; padding:8px 12px; opacity:0; transition:.25s; max-width:380px; }
+  #toast.show { opacity:1; }
+  .scroll { max-height:230px; overflow:auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>压降译井台</h1>
+  <span class="sub">变流量 · 非等间隔等效时间 · Bourdet 对数导数 · 换档分段</span>
+  <span style="flex:1"></span>
+  <button onclick="importData()">导入固定 fixture</button>
+  <button onclick="resetData()">清空数据库</button>
+  <button class="primary" onclick="newRun()">新建方案</button>
+  <select id="runSel" onchange="loadRun(this.value)" style="width:150px"></select>
+</header>
+
+<div class="layout">
+  <div>
+    <div class="grid4">
+      <div class="card">
+        <h3>流量历史（右连续）</h3>
+        <svg id="rateChart" height="150"></svg>
+      </div>
+      <div class="card">
+        <h3>压力（原始 / 换档校正）</h3>
+        <svg id="pressChart" height="150"></svg>
+      </div>
+    </div>
+    <div class="card" style="margin-top:10px">
+      <h3>诊断图：Δp 与对数导数 vs 等效时间（log-log）</h3>
+      <svg id="diagChart" height="300"></svg>
+      <div class="legend">
+        <span><i style="background:var(--dp)"></i>Δp</span>
+        <span><i style="background:var(--der)"></i>对数导数 dΔp/dln teq</span>
+        <span><i style="background:var(--raw)"></i>原始读数</span>
+        <span class="muted">虚线=单侧导数；⊕=重复时刻/非正 teq；▲=换档点</span>
+      </div>
+    </div>
+    <div class="card" style="margin-top:10px">
+      <h3>逐样本诊断（重复时刻 / 非正等效时间保留）</h3>
+      <div class="scroll"><table id="sampleTable"></table></div>
+    </div>
+  </div>
+
+  <div class="side">
+    <div class="card">
+      <h3>流量修订（不改原始读数）</h3>
+      <div id="stageEditor"></div>
+      <div class="row"><button onclick="saveRevision()">保存为新版本</button>
+        <span class="muted">当前版本：<b id="revLabel">-</b></span></div>
+    </div>
+
+    <div class="card">
+      <h3>仪器换档</h3>
+      <div class="row">
+        index <input id="shiftIdx" type="number" style="width:70px" />
+        offset <input id="shiftOff" type="number" placeholder="自动" style="width:80px" />
+        <button onclick="addShift()">标记换档</button>
+      </div>
+      <div id="shiftList" class="muted"></div>
+    </div>
+
+    <div class="card">
+      <h3>流态区段方案（可并排）</h3>
+      <div class="row">
+        <span class="muted">平滑邻居</span><input id="neighbors" type="number" value="2" style="width:56px" />
+        <span class="muted">L窗(ln)</span><input id="smoothL" type="number" value="1.2" style="width:60px" />
+      </div>
+      <div id="intervalList"></div>
+    </div>
+
+    <div class="card">
+      <h3>运行指纹 / 回放</h3>
+      <div class="row"><span class="pill" id="fingerprint">-</span></div>
+      <div class="row">
+        <button onclick="exportRun()">导出运行</button>
+        <button onclick="replayRun()">重放并核对</button>
+      </div>
+      <div id="replay" class="muted"></div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+<script>
+const $ = id => document.getElementById(id);
+let raw = null, stages = [], currentRun = null, runs = [];
+let shifts = [];
+
+function toast(msg, ok=true){
+  const t=$("toast"); t.textContent=msg;
+  t.style.borderColor = ok ? "var(--accent)" : "var(--warn)";
+  t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),2600);
+}
+async function api(path, opts){
+  const r = await fetch(path, opts);
+  if(!r.ok){ throw new Error((await r.json().catch(()=>({detail:r.statusText}))).detail); }
+  return r.json();
+}
+
+async function init(){
+  const h = await api("/api/health");
+  if(!h.has_data){ toast("数据库为空，请先导入 fixture"); }
+  await refreshRaw(); await refreshRuns();
+}
+async function refreshRaw(){
+  raw = await api("/api/raw").catch(()=>null);
+  if(!raw) return;
+  stages = raw.current_stages;
+  $("revLabel").textContent = raw.revisions.length ? "v"+raw.revisions.at(-1).version : "原始 v0";
+  renderStages(); drawRate(); drawPressure();
+}
+async function refreshRuns(){
+  const d = await api("/api/runs").catch(()=>({runs:[]}));
+  runs = d.runs || [];
+  const sel=$("runSel"); sel.innerHTML="";
+  runs.forEach(r=>{ const o=document.createElement("option");
+    o.value=r.id; o.textContent=`#${r.id} ${r.name}`; sel.appendChild(o); });
+  if(currentRun && runs.some(r=>r.id===currentRun.id)) sel.value=currentRun.id;
+}
+async function importData(){
+  const d = await api("/api/import", {method:"POST"});
+  currentRun=null; shifts=[];
+  toast(`已导入 ${d.n} 个样本（${d.fixture_version}）`);
+  await refreshRaw(); await refreshRuns();
+}
+async function resetData(){
+  await api("/api/reset",{method:"POST"});
+  raw=null; currentRun=null;
+  ["rateChart","pressChart","diagChart"].forEach(id=>$(id).innerHTML="");
+  $("sampleTable").innerHTML=""; $("intervalList").innerHTML="";
+  $("fingerprint").textContent="-";
+  await refreshRaw().catch(()=>{}); await refreshRuns();
+  toast("数据库已清空");
+}
+
+// ---------- 流量阶段 ----------
+function renderStages(){
+  $("stageEditor").innerHTML = stages.map((s,i)=>`
+    <div class="row">阶段${i}: start
+      <input value="${s.start}" data-k="start" data-i="${i}" />
+      rate <input value="${s.rate}" data-k="rate" data-i="${i}" /></div>`).join("");
+}
+function editedStages(){
+  return stages.map((s,i)=>{
+    const st=document.querySelector(`[data-k="start"][data-i="${i}"]`).value;
+    const rt=document.querySelector(`[data-k="rate"][data-i="${i}"]`).value;
+    return {start:parseFloat(st), rate:parseFloat(rt)};
+  });
+}
+async function saveRevision(){
+  try{
+    const d = await api("/api/revisions",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({stages:editedStages(), note:"页面修订"})});
+    toast(`已保存流量修订 v${d.version}`); await refreshRaw();
+  }catch(e){ toast(e.message,false); }
+}
+
+// ---------- 换档 ----------
+function addShift(){
+  const idx=parseInt($("shiftIdx").value);
+  const offRaw=$("shiftOff").value;
+  if(Number.isNaN(idx)){ toast("请填写换档 index",false); return; }
+  const sh={index:idx};
+  if(offRaw!=="") sh.offset=parseFloat(offRaw);
+  if(!shifts.some(s=>s.index===idx)) shifts.push(sh);
+  shifts.sort((a,b)=>a.index-b.index);
+  renderShifts();
+}
+function renderShifts(){
+  if(!currentRun){ $("shiftList").textContent = shifts.map(s=>`index ${s.index}${s.offset!=null?` offset ${s.offset}`:" (自动)"}`).join("；") || "无"; return; }
+  const res=currentRun.resolved_shifts||[];
+  $("shiftList").innerHTML = res.map(s=>`<div>index ${s.index} @ t=${s.time.toFixed(2)} → 估计跳变 ${s.offset.toFixed(3)} kPa</div>`).join("") || "<span class='muted'>无</span>";
+}
+
+// ---------- 运行 ----------
+async function newRun(){
+  try{
+    currentRun = await api("/api/runs",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        name:`方案 ${runs.length+1}`, shifts,
+        smooth_neighbors:parseInt($("neighbors").value)||2,
+        smooth_l:parseFloat($("smoothL").value)||1.2})});
+    shifts=currentRun.shifts;
+    toast(`已创建方案 #${currentRun.id}，指纹 ${currentRun.fingerprint}`);
+    await refreshRuns(); showRun();
+  }catch(e){ toast(e.message,false); }
+}
+async function loadRun(id){
+  if(!id) return;
+  currentRun = await api(`/api/runs/${id}`);
+  shifts = currentRun.shifts.map(s=>({...s}));
+  $("neighbors").value=currentRun.smooth_neighbors;
+  $("smoothL").value=currentRun.smooth_l;
+  showRun();
+}
+function showRun(){
+  $("fingerprint").textContent = currentRun.fingerprint + `  (流量修订 v${currentRun.rate_revision})`;
+  renderShifts(); drawDiagnostic(); renderIntervals(); renderSamples();
+}
+
+// ---------- SVG 绘图 ----------
+function svgEl(n,a){ const e=document.createElementNS("http://www.w3.org/2000/svg",n);
+  for(const k in a) e.setAttribute(k,a[k]); return e; }
+function scales(min,max,w,pad){ return v=> pad + (v-min)/(max-min||1e-9)*(w-2*pad); }
+
+function drawRate(){
+  if(!raw) return;
+  const svg=$("rateChart"); svg.innerHTML="";
+  const W=svg.clientWidth||460,H=150,pad=34;
+  const st=stages;
+  const tmax=Math.max(...raw.times);
+  const qmax=Math.max(...st.map(s=>s.rate))*1.15;
+  const x=scales(0,tmax,W,pad), y=scales(0,qmax,H,pad);
+  // 轴
+  svg.appendChild(svgEl("line",{x1:pad,y1:H-pad,x2:W-pad,y2:H-pad,stroke:"#33415f"}));
+  svg.appendChild(svgEl("line",{x1:pad,y1:pad,x2:pad,y2:H-pad,stroke:"#33415f"}));
+  // 阶梯（右连续：阶跃发生在 start）
+  for(let i=0;i<st.length;i++){
+    const t0=st[i].start, q=st[i].rate;
+    const t1=(i+1<st.length)?st[i+1].start:tmax;
+    svg.appendChild(svgEl("line",{x1:x(t0),y1:y(q),x2:x(t1),y2:y(q),
+      stroke:"var(--accent)","stroke-width":2}));
+    if(i+1<st.length)
+      svg.appendChild(svgEl("line",{x1:x(t1),y1:y(q),x2:x(t1),y2:y(st[i+1].rate),
+        stroke:"var(--warn)","stroke-dasharray":"3 3"}));
+    const t=svgEl("text",{x:x(t0)+2,y:H-pad+12,"font-size":9,fill:"#93a0bb"});
+    t.textContent=t0; svg.appendChild(t);
+  }
+  // 样本时刻竖线
+  raw.times.forEach((tt,idx)=>{
+    if(raw.times.indexOf(tt)!==idx) return;
+    svg.appendChild(svgEl("line",{x1:x(tt),y1:H-pad,x2:x(tt),y2:H-pad+4,stroke:"#54607d"}));
+  });
+}
+
+function drawPressure(){
+  if(!raw) return;
+  const svg=$("pressChart"); svg.innerHTML="";
+  const W=svg.clientWidth||460,H=150,pad=40;
+  const s=currentRun?currentRun.samples:raw.times.map((t,i)=>({time:t,pressure:raw.pressures[i],pressure_raw:raw.pressures[i],segment:0,flags:[]}));
+  const tmax=Math.max(...s.map(d=>d.time));
+  const pmin=Math.min(...s.map(d=>d.pressure_raw));
+  const pmax=Math.max(...s.map(d=>d.pressure_raw));
+  const x=scales(0,tmax,W,pad), y=scales(pmin-2,pmax+2,H,pad);
+  svg.appendChild(svgEl("line",{x1:pad,y1:H-pad,x2:W-pad,y2:H-pad,stroke:"#33415f"}));
+  const line=(key,color,w)=>{
+    let d="";
+    [...s].sort((a,b)=>a.time-b.time).forEach((p,i)=>{ d+=(i?"L":"M")+x(p.time)+","+y(p[key]); });
+    svg.appendChild(svgEl("path",{d,fill:"none",stroke:color,"stroke-width":w}));
+  };
+  line("pressure_raw","var(--raw)",1.3);
+  if(currentRun) line("pressure","var(--accent)",1.8);
+  // 换档点
+  (currentRun?currentRun.resolved_shifts:[]).forEach(sh=>{
+    const p=s.find(z=>z.time===sh.time);
+    if(p) svg.appendChild(svgEl("path",{d:`M${x(p.time)-4},${y(p.pressure)-4} l8,8 M${x(p.time)+4},${y(p.pressure)-4} l-8,8`,
+      stroke:"var(--warn)","stroke-width":2}));
+  });
+}
+
+function drawDiagnostic(){
+  drawPressure();
+  if(!currentRun) return;
+  const svg=$("diagChart"); svg.innerHTML="";
+  const W=svg.clientWidth||900,H=300,pad=46;
+  const pts=currentRun.samples.filter(s=>s.teq>0 && s.derivative!==null && s.dp>0);
+  if(!pts.length) return;
+  const xmin=Math.min(...pts.map(s=>s.teq)), xmax=Math.max(...pts.map(s=>s.teq));
+  const lx0=Math.log10(xmin), lx1=Math.log10(xmax);
+  const allv=pts.flatMap(s=>[s.dp,s.derivative]).filter(v=>v>0);
+  const ly0=Math.log10(Math.min(...allv)), ly1=Math.log10(Math.max(...allv));
+  const x=v=>pad+(Math.log10(v)-lx0)/(lx1-lx0||1e-9)*(W-2*pad);
+  const y=v=>H-pad-(Math.log10(v)-ly0)/(ly1-ly0||1e-9)*(H-2*pad);
+  // 网格
+  for(let g=0;g<=4;g++){
+    const gx=pad+g*(W-2*pad)/4;
+    svg.appendChild(svgEl("line",{x1:gx,y1:pad,x2:gx,y2:H-pad,stroke:"#1d2740"}));
+  }
+  svg.appendChild(svgEl("line",{x1:pad,y1:H-pad,x2:W-pad,y2:H-pad,stroke:"#33415f"}));
+  svg.appendChild(svgEl("line",{x1:pad,y1:pad,x2:pad,y2:H-pad,stroke:"#33415f"}));
+  const line=(key,color,segBreak)=>{
+    let d="",lastSeg=null;
+    pts.forEach(p=>{
+      if(p[key]==null||p[key]<=0) return;
+      if(segBreak && lastSeg!==null && p.segment!==lastSeg){ d+="M"; } else { d+= d===""||d.endsWith("M")?"M":"L"; }
+      d+=x(p.teq)+","+y(p[key]); lastSeg=p.segment;
+    });
+    svg.appendChild(svgEl("path",{d,fill:"none",stroke:color,"stroke-width":1.8}));
+  };
+  line("dp","var(--dp)",false);
+  line("derivative","var(--der)",true);
+  // 导数点；单侧虚线小标记；重复/非正 teq 用⊕（在原始样本中）
+  pts.forEach(p=>{
+    if(p.derivative==null) return;
+    svg.appendChild(svgEl("circle",{cx:x(p.teq),cy:y(p.derivative),r:p.one_sided?2:2.6,
+      fill:p.one_sided?"#3a2b18":"var(--der)",stroke:p.one_sided?"var(--warn)":"none"}));
+  });
+  currentRun.samples.forEach(s=>{
+    if(s.flags.includes("duplicate_time")||s.flags.includes("teq_nonpositive")){
+      const xx = s.teq>0?x(s.teq):pad;
+      const yy = s.dp>0?y(s.dp):H-pad;
+      const t=svgEl("text",{x:xx-3,y:yy-5,"font-size":10,fill:"var(--warn)"}); t.textContent="+";
+      svg.appendChild(t);
+    }
+  });
+  // 区段高亮
+  (currentRun.intervals||[]).forEach(iv=>{
+    const ip=intervalMembers(iv);
+    if(ip.length<2) return;
+    const xs=ip.map(s=>x(s.teq));
+    const color={wbs:"var(--ok)",radial:"var(--accent)",boundary:"var(--warn)"}[iv.regime];
+    svg.appendChild(svgEl("rect",{x:Math.min(...xs)-3,y:pad,width:Math.max(...xs)-Math.min(...xs)+6,
+      height:H-2*pad,fill:color,opacity:0.07,stroke:color,"stroke-dasharray":"4 3"}));
+  });
+}
+
+function intervalMembers(iv){
+  return currentRun.samples.filter(s=>s.teq>0&&s.derivative!==null&&s.dp>0
+    && (iv.left_open?s.teq>iv.left:s.teq>=iv.left)
+    && (iv.right_open?s.teq<iv.right:s.teq<=iv.right)
+    && (!iv.segments||iv.segments.includes(s.segment))
+    && (!iv.rates||iv.rates.some(r=>Math.abs(s.rate-r)<1e-9))
+    && (!iv.sample_indices||iv.sample_indices.includes(s.index)));
+}
+
+// ---------- 区段列表与参数 ----------
+const REGIME_NAME={wbs:"早期井筒储集",radial:"径向流",boundary:"边界效应"};
+function renderIntervals(){
+  const box=$("intervalList"); box.innerHTML="";
+  if(!currentRun) { box.innerHTML="<span class='muted'>新建方案后显示候选区段。</span>"; return; }
+  const results = currentRun.interval_results||[];
+  currentRun.intervals.forEach((iv,i)=>{
+    const res=results[i]||{};
+    const members=intervalMembers(iv);
+    const div=document.createElement("div"); div.className="iv "+iv.regime;
+    div.innerHTML=`
+      <div><b>${REGIME_NAME[iv.regime]||iv.regime}</b>
+        <span class="muted">有效样本 ${res.effective_samples??members.length}</span></div>
+      <div class="row">teq
+        <input value="${iv.left.toFixed(3)}" id="ivL${i}" style="width:74px" />
+        <label class="muted"><input type="checkbox" id="ivLO${i}" style="width:auto" ${iv.left_open?"checked":""}/>开</label>
+        →
+        <input value="${iv.right.toFixed(2)}" id="ivR${i}" style="width:74px" />
+        <label class="muted"><input type="checkbox" id="ivRO${i}" style="width:auto" ${iv.right_open?"checked":""}/>开</label>
+      </div>
+      <div class="row">
+        ${iv.regime==="radial"?`锁定平台斜率
+          <input value="${iv.locked_slope??''}" id="ivSl${i}" placeholder="自动" style="width:70px" />`:""}
+        <span class="muted">平滑L</span>
+        <input value="${iv.smooth_l??currentRun.smooth_l}" id="ivSm${i}" style="width:56px" />
+      </div>
+      <div class="muted" id="ivParam${i}"></div>`;
+    box.appendChild(div);
+    const param=div.querySelector(`#ivParam${i}`);
+    param.innerHTML = formatParams(iv,res);
+    ["ivL"+i,"ivR"+i,"ivLO"+i,"ivRO"+i,"ivSl"+i,"ivSm"+i].forEach(id=>{
+      const el=$(id); if(el) el.onchange=()=>saveIntervals();
+    });
+  });
+}
+function formatParams(iv,res){
+  if(res.status==="insufficient_samples") return "有效样本不足。";
+  const f=v=>v==null?"-":(typeof v==="number"?v.toFixed(3):v);
+  if(iv.regime==="wbs")
+    return `C（储集系数）=${f(res.storage_coefficient)}；斜率 dΔp/dlnteq=${f(res.slope_dp_dlnt)}`;
+  if(iv.regime==="radial")
+    return `平台导数=${f(res.plateau_derivative)}；log-log斜率=${f(res.slope_loglog)}；渗透率 k=${f(res.permeability)}${res.locked?"（已锁定）":""}`;
+  return `边界斜率=${f(res.slope_loglog)}；teq截距=${f(res.teq_unit_line_intercept)}；r_b≈${f(res.boundary_radius_estimate)}`;
+}
+async function saveIntervals(){
+  const next=currentRun.intervals.map((iv,i)=>({
+    ...iv,
+    left:parseFloat($("ivL"+i).value),
+    right:parseFloat($("ivR"+i).value),
+    left_open:$("ivLO"+i).checked,
+    right_open:$("ivRO"+i).checked,
+    locked_slope: iv.regime==="radial"
+      ? ($("ivSl"+i).value===""?null:parseFloat($("ivSl"+i).value)) : null,
+    smooth_l: parseFloat($("ivSm"+i).value),
+  }));
+  currentRun = await api(`/api/runs/${currentRun.id}/intervals`,{
+    method:"PUT",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(next)});
+  $("fingerprint").textContent=currentRun.fingerprint+`  (流量修订 v${currentRun.rate_revision})`;
+  drawDiagnostic(); renderIntervals();
+  toast("区段已更新，指纹已重算");
+}
+
+// ---------- 样本表 ----------
+function renderSamples(){
+  if(!currentRun) return;
+  const rows=currentRun.samples.map(s=>{
+    const flags=(s.flags||[]).map(f=>`<span class="tag flag">${
+      f==="duplicate_time"?"重复时刻":f==="teq_nonpositive"?"teq≤0":"阶跃样本"}</span>`).join(" ");
+    return `<tr>
+      <td>#${s.index} ${flags}</td>
+      <td>${s.time.toFixed(2)}</td><td>${s.rate.toFixed(0)}</td>
+      <td>${s.teq>0?s.teq.toFixed(3):"0"}</td>
+      <td>${s.pressure_raw.toFixed(3)}</td><td>${s.pressure.toFixed(3)}</td>
+      <td>${s.dp.toFixed(3)}</td>
+      <td>${s.derivative==null?"-":s.derivative.toFixed(3)}${s.one_sided?"*":""}</td>
+      <td>${s.segment}</td></tr>`;
+  }).join("");
+  $("sampleTable").innerHTML=
+    `<tr><th>样本</th><th>t</th><th>q</th><th>teq</th><th>p原始</th>
+      <th>p校正</th><th>Δp</th><th>导数</th><th>段</th></tr>${rows}`;
+}
+
+// ---------- 导出 / 重放 ----------
+async function exportRun(){
+  if(!currentRun){ toast("请先选择方案",false); return; }
+  const d=await api(`/api/runs/${currentRun.id}/export`);
+  const blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=`run_${currentRun.id}_${currentRun.fingerprint}.json`;
+  a.click();
+  toast("运行记录已导出");
+}
+async function replayRun(){
+  if(!currentRun){ toast("请先选择方案",false); return; }
+  const d=await api(`/api/runs/${currentRun.id}/export`);
+  const r=await fetch("/api/runs/replay",{method:"POST",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify(d)});
+  const j=await r.json();
+  $("replay").innerHTML = `重放指纹 <span class="pill">${j.fingerprint}</span><br/>
+    与导出指纹一致：<b style="color:${j.matches?"var(--ok)":"var(--warn)"}">${j.matches?"是 ✓":"否 ✗"}</b><br/>
+    换档估计：${j.resolved_shifts.map(s=>`#${s.index}=${s.offset.toFixed(2)}`).join("，")}`;
+  toast(j.matches?"重放指纹一致":"指纹不一致",j.matches);
+}
+
+init();
+</script>
+</body>
+</html>
